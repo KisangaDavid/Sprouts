@@ -35,6 +35,50 @@ last_line_in_loop = None
 poly_list = []
 last_poly_list = []
 
+class Dot():
+    def __init__(self, da_point, con1, con2, con3, num_con):
+        self.con_list = []
+        if con1 != None:
+            self.con_list.append(con1)
+        if con2 != None:
+            self.con_list.append(con2)
+        if con3 != None:
+            self.con_list.append(con3)
+        self.xval = da_point.x
+        self.yval = da_point.y
+        self.point = da_point
+        self.num_con = num_con
+        self.parent = self
+        self.marked = False
+        self.in_or_on_poly = []
+        self.on_poly = []
+        self.isolated = False
+
+    def draw_self(self):
+        pygame.draw.circle(screen, "black", (self.xval, self.yval), DOT_RADIUS)
+
+class Line():
+    def __init__(self, point_list, start, end):
+        self.line_string = LineString(point_list)
+        self.point_list = point_list
+        self.start = start
+        self.end = end
+        self.marked = False
+        self.prev_line = None
+        self.adj_lines = []
+
+    def find_adj(self):
+        self.adj_lines.clear()
+        for line in line_list:
+            if (line.start == self.start or line.start == self.end or line.end == self.start or line.end == self.end) and line != self:
+                self.adj_lines.append(line)
+
+    def reverse(self):
+        temp = self.start
+        self.start = self.end
+        self.end = temp
+        self.point_list.reverse()
+        self.line_string = LineString(self.point_list)
 
 def remove_consecutive_dups(list):
     return [i[0] for i in itertools.groupby(list)]
@@ -60,19 +104,8 @@ def update_dot_boundings():
         for poly in poly_list:
             if poly.contains(dot.point) or poly.touches(dot.point):
                 dot.in_or_on_poly.append(poly)
-                print(str(dot.xval) + " " + str(dot.yval))
             if poly.touches(dot.point):
                 dot.on_poly.append(poly)
-            # elif len(poly.interiors) > 0:
-            #     for ring in poly.interiors:
-            #         if ring.intersects(dot.point):
-            #             dot.in_poly = poly
-                print(str(dot.xval) + " " + str(dot.yval))
-            # elif poly.touches(dot.point):
-            #     dot.on_poly.append(poly)
-            #     print(str(dot) + "IS ON POLY")
-
-
 
 def available_moves():
     for dot in dot_list:
@@ -92,10 +125,6 @@ def available_moves():
                 return True
             if (len(dot.on_poly) < 2 and (dot.in_or_on_poly == dot.on_poly)) and (len(con_dot.on_poly) < 2 and (con_dot.in_or_on_poly == con_dot.on_poly)):
                 return True
-            # if (dot.in_poly == con_dot.in_poly and dot.in_poly != None) or (dot.in_poly in con_dot.on_poly):
-            #     return True
-            # if (dot.in_poly == None and con_dot.in_poly == None) and (len(dot.on_poly) < 2 and len(con_dot.on_poly) < 2):
-            #     return True
     return False
 
 def update_misc(available_bool):
@@ -109,10 +138,6 @@ def update_misc(available_bool):
     else:
         turn_text = turn_font.render("Player 2's Turn", True, (0,0,0))
 
-
-# when you place a dot it connects only to other dots within the same polygon or on its perimeter. if the dot is not in a polygon then it can only connect to other dots that are also not in a polygon. It can connect to other dots ON a polygon tho as long as they aint inside.
-# if not inside a polygon but on two different polygons, if those two share a side then merge them creating a new polygon. The dot is now inside that bigger polygon
-# on creation of a new polygon, if it is within another polygon or another polygon is within it, split the polygon into two.
 def fix_loop_list(loop_line_list):
     to_return = []
     front_con = False
@@ -137,9 +162,6 @@ def fix_loop_list(loop_line_list):
 def area_func(poly):
     return poly.area
 
-#maybe sort by size, only add bigger one once
-# if dots on same poly, they can connect
-
 def add_to_poly_list(loop_poly):
     global poly_list
     global last_poly_list
@@ -161,69 +183,6 @@ def add_to_poly_list(loop_poly):
             new_poly_list.append(poly)
     new_poly_list.append(cur_section)
     poly_list = new_poly_list
-
-
-
-class Dot():
-    def __init__(self, da_point, con1, con2, con3, num_con):
-        self.con_list = []
-        if con1 != None:
-            self.con_list.append(con1)
-        if con2 != None:
-            self.con_list.append(con2)
-        if con3 != None:
-            self.con_list.append(con3)
-        self.xval = da_point.x
-        self.yval = da_point.y
-        self.point = da_point
-        self.num_con = num_con
-        self.parent = self
-        self.marked = False
-        self.in_or_on_poly = []
-        self.on_poly = []
-        self.isolated = False
-
-    def draw_self(self):
-        pygame.draw.circle(screen, "black", (self.xval, self.yval), DOT_RADIUS)
-
-    def find_set(self):
-        if self == self.parent:
-            return self
-        self.parent = self.parent.find_set()
-        return self.parent
-
-    def union_dots(self, dot2):
-        if self.find_set() == dot2.find_set():
-            print("LOOP")
-        else:
-            self.parent = dot2.find_set()
-
-
-
-class Line():
-    def __init__(self, point_list, start, end):
-        self.line_string = LineString(point_list)
-        self.point_list = point_list
-        self.start = start
-        self.end = end
-        self.marked = False
-        self.prev_line = None
-        self.adj_lines = []
-
-    def find_adj(self):
-        self.adj_lines.clear()
-        for line in line_list:
-            if (line.start == self.start or line.start == self.end or line.end == self.start or line.end == self.end) and line != self:
-                self.adj_lines.append(line)
-
-    def reverse(self):
-        temp = self.start
-        self.start = self.end
-        self.end = temp
-        self.point_list.reverse()
-        self.line_string = LineString(self.point_list)
-
-
 
 def split_line_at_dot(line, dot):
     intersect_point = Point(dot.xval, dot.yval)
@@ -254,7 +213,6 @@ def check_loop(cur_line, end_point):
     cur_line.find_adj()
     for line in cur_line.adj_lines:
         if not line.marked:
-            print("RECURSION")
             line.prev_line = cur_line
             cur_path.append(line)
             check_loop(line, end_point)
@@ -276,83 +234,10 @@ def sort_loop(loop):
                 cur_line = line
                 break
     return to_return
-    
-# def initialize_board():
-#     dot1 = Dot(Point(100,400), None, None, None, 0)
-#    # dot2 = Dot(Point(300,400), None, None, None, 0)
-#    # dot3 = Dot(Point(500,400), None, None, None, 0)
-#     dot4 = Dot(Point(700,400), None, None, None, 0)
-#     dot_list.append(dot1)
-#   #  dot_list.append(dot2)
-#   #  dot_list.append(dot3)
-#     dot_list.append(dot4)
-    
-def draw_polys():
-    global poly_list
-    poly_list.sort(reverse = True, key = area_func)
-    i = 0
-    for poly in poly_list:
-        if i == 0:
-            pygame.draw.polygon(screen, "red", poly.exterior.coords, width = 0)
-            i += 1
-        elif i == 1:
-            pygame.draw.polygon(screen, "yellow", poly.exterior.coords, width = 0)
-            i += 1
-        elif i == 2:
-            pygame.draw.polygon(screen, "orange", poly.exterior.coords, width = 0)
-            i += 1
-        elif i == 3:
-            pygame.draw.polygon(screen, "purple", poly.exterior.coords, width = 0)
-            i += 1
-        elif i == 4:
-            pygame.draw.polygon(screen, "green", poly.exterior.coords, width = 0)
-            i += 1
-        elif i == 5:
-            pygame.draw.polygon(screen, "brown", poly.exterior.coords, width = 0)
-            i += 1
-        elif i == 6:
-            pygame.draw.polygon(screen, "grey", poly.exterior.coords, width = 0)
-            i += 1
-        elif i == 7:
-            pygame.draw.polygon(screen, "pink", poly.exterior.coords, width = 0)
-            i += 1
-        elif i == 8:
-            pygame.draw.polygon(screen, "light green", poly.exterior.coords, width = 0)
-            i += 1
-        elif i == 9:
-            pygame.draw.polygon(screen, "light blue", poly.exterior.coords, width = 0)
-            i = 0
 
-    # for poly in poly_list:
-    #     if i == 0:
-    #         pygame.draw.lines(screen, "red", False, poly.exterior.coords, width = 4)
-    #         i += 1
-    #     elif i == 1:
-    #         pygame.draw.lines(screen, "blue", False, poly.exterior.coords, width = 4)
-    #         i += 1
-    #     elif i == 2:
-    #         pygame.draw.lines(screen, "green", False, poly.exterior.coords, width = 4)
-    #         i += 1
-    #     elif i == 3:
-    #         pygame.draw.lines(screen, "yellow", False, poly.exterior.coords, width = 4)
-    #         i += 1
-    #     elif i == 4:
-    #         pygame.draw.lines(screen, "orange", False, poly.exterior.coords, width = 4)
-    #         i += 1
-    #     elif i == 5:
-    #         pygame.draw.lines(screen, "purple", False, poly.exterior.coords, width = 4)
-    #         i = 0
 def draw_lines():
     for line in line_list:
         pygame.draw.lines(screen, "black", False, line.point_list, width = 4)
-
-def draw_last_polys():
-    for poly in last_poly_list:
-        pygame.draw.lines(screen, "orange", False, poly.exterior.coords, width = 4)
-
-def draw_loop_lines():
-    for line in loop_line_list:
-        pygame.draw.lines(screen, "blue", False, line.point_list, width = 4)
 
 def draw_cur_line():
     if(len(cur_line) > 1 ):
@@ -405,19 +290,13 @@ def set_up_board():
                 cur_display_dot = None
                 break
 
-
-# initialize_board()
-
 set_up_board()
 
 while True:
     screen.fill((230, 230, 230))
-    draw_polys()
     draw_dots()
     draw_cur_line()
     draw_lines()
-    draw_loop_lines()
-    draw_last_polys()
     draw_cur_dot()
     draw_misc()
     clock.tick(60)
@@ -447,7 +326,6 @@ while True:
                     check_loop(line_list[-1], start_dot)
                 for line in line_list:
                     line.marked = False
-                print(str(found_loop))
                 if found_loop:
                     loop_line_list.clear()
                     if start_dot == end_dot:
@@ -458,7 +336,6 @@ while True:
                         temp_line = last_line_in_loop
                         big_line = []
                         while temp_line.prev_line != None:
-                            #big_line += temp_line.point_list
                             loop_line_list.append(temp_line)
                             temp_line = temp_line.prev_line
                         loop_line_list.append(line1)
@@ -477,9 +354,7 @@ while True:
                 update_dot_boundings()
                 available_bool = available_moves()
                 p1_turn = not p1_turn
-                print(str(p1_turn))
                 update_misc(available_bool)
-                print("available moves: " + str(available_bool) + "\n")
         elif event.type == pygame.MOUSEBUTTONUP:
             overlap = False
             if event.button == 1 and dragging:
