@@ -7,14 +7,13 @@ import itertools
 DOT_RADIUS = 8
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 900
+
 pygame.init()
 pygame.font.init()
 clock = pygame.time.Clock()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-screen.fill((230, 230, 230))
-pygame.display.set_caption("Sprouts")
-dragging = False
 
+dragging = False
 p1_turn = True
 turn_font = pygame.font.SysFont("arial", 30)
 turn_text = None
@@ -24,35 +23,20 @@ cur_line = []
 overlap = False
 dot_mode = False
 cur_display_dot = None
-loop_counter = 0
-first_time = True
-con_to_start = False
-con_to_end = False
 found_loop = False
-cur_path = []
 loop_line_list = []
 last_line_in_loop = None
 poly_list = []
-last_poly_list = []
 
 class Dot():
-    def __init__(self, da_point, con1, con2, con3, num_con):
-        self.con_list = []
-        if con1 != None:
-            self.con_list.append(con1)
-        if con2 != None:
-            self.con_list.append(con2)
-        if con3 != None:
-            self.con_list.append(con3)
+    def __init__(self, da_point, num_con):
         self.xval = da_point.x
         self.yval = da_point.y
         self.point = da_point
         self.num_con = num_con
-        self.parent = self
         self.marked = False
         self.in_or_on_poly = []
         self.on_poly = []
-        self.isolated = False
 
     def draw_self(self):
         pygame.draw.circle(screen, "black", (self.xval, self.yval), DOT_RADIUS)
@@ -164,7 +148,6 @@ def area_func(poly):
 
 def add_to_poly_list(loop_poly):
     global poly_list
-    global last_poly_list
     new_poly_list = []
     engulfing_poly = None
     poly_list.sort(reverse = True, key = area_func)
@@ -214,7 +197,6 @@ def check_loop(cur_line, end_point):
     for line in cur_line.adj_lines:
         if not line.marked:
             line.prev_line = cur_line
-            cur_path.append(line)
             check_loop(line, end_point)
 
 def sort_loop(loop):
@@ -276,7 +258,7 @@ def set_up_board():
             if event.type == pygame.QUIT:
                 raise SystemExit
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and cur_display_dot:
-                new_dot = Dot(cur_display_dot, None, None, None, 0)
+                new_dot = Dot(cur_display_dot, 0)
                 dot_list.append(new_dot)
                 pass
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
@@ -290,6 +272,7 @@ def set_up_board():
                 cur_display_dot = None
                 break
 
+pygame.display.set_caption("Sprouts")
 set_up_board()
 
 while True:
@@ -312,7 +295,7 @@ while True:
                         start_dot = dot
                         dragging = True
             elif cur_display_dot:
-                new_dot = Dot(cur_display_dot, start_dot, end_dot, None, 2)
+                new_dot = Dot(cur_display_dot, 2)
                 dot_list.append(new_dot)
                 # put inside function
                 two_lines = split_line_at_dot(line_list[-1].point_list, new_dot)
@@ -346,7 +329,6 @@ while True:
                         for line in sorted_loop:
                             big_line += line.point_list
                         loop_poly = Polygon(big_line)
-                    last_poly_list.clear()
                     add_to_poly_list(loop_poly)
                 found_loop = False
                 cur_display_dot = None
