@@ -60,6 +60,16 @@ class Line():
             if (line.start == self.start or line.start == self.end or line.end == self.start or line.end == self.end) and line != self:
                 self.adj_lines.append(line)
 
+    def find_start_end(self):
+        for dot in dot_list:
+            if dot.point == self.point_list[0]:
+                print("FOUND START")
+                self.start = dot
+            if dot.point == self.point_list[-1]:
+                print("FOUND END")
+                self.end = dot
+
+
     def reverse(self):
         temp = self.start
         self.start = self.end
@@ -264,6 +274,29 @@ def setup_server_sync(received_data):
     if received_data[1] != cur_display_dot and received_data[1] != None:
         cur_display_dot = received_data[1]
 
+def main_server_sync(received_data):
+    global cur_display_dot
+    global cur_line
+    global line_list
+    if received_data[1] != cur_display_dot:
+        cur_display_dot = received_data[1]
+    if received_data[2] != cur_line:
+        cur_line = received_data[2]
+    if received_data[0] != dot_list[-1].point:
+        new_dot = Dot(received_data[0], 0)
+        dot_list.append(new_dot)
+        two_lines = split_line_at_dot(line_list[-1].point_list, new_dot)
+        line1 = Line(two_lines[0], None, None)
+        line1.find_start_end()
+        line2 = Line(two_lines[1], None, None)
+        line2.find_start_end()
+        line_list[-1] = line1
+        line_list[-1].marked = True
+        line_list.append(line2)
+        line_list[-1].find_adj()
+        update_backend()
+
+# to_send_list = [dot_list[-1].point, cur_display_dot, cur_line]
 
 def set_up_board():
     global n
@@ -290,6 +323,7 @@ def set_up_board():
                     pass
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
                     cur_display_dot = None
+                    n.send(24)
                     return
             mpos = pygame.mouse.get_pos()
             mpos_point = Point(mpos)
@@ -303,12 +337,54 @@ def set_up_board():
                 if event.type == pygame.QUIT:
                     raise SystemExit
             received_list = n.send([True, 4])
+            if (received_list == 48):
+                break
             setup_server_sync(received_list)
 
 pygame.display.set_caption("Sprouts")
 n = Network()
 print(n.id)
 set_up_board()
+
+def update_backend():
+    global found_loop
+    global loop_line_list
+    global p1_turn
+    global cur_display_dot
+    global dot_mode
+    global pre_line
+    if len(line_list[-1].adj_lines) > 1:
+        check_loop(line_list[-1], start_dot)
+    for line in line_list:
+        line.marked = False
+    if found_loop:
+        loop_line_list.clear()
+        if start_dot == end_dot:
+            loop_line_list.append(line1)
+            loop_line_list.append(line2)
+            loop_poly = Polygon(line1.point_list + line2.point_list) 
+        else:
+            temp_line = last_line_in_loop
+            big_line = []
+            while temp_line.prev_line != None:
+                loop_line_list.append(temp_line)
+                temp_line = temp_line.prev_line
+            loop_line_list.append(line1)
+            loop_line_list.append(line2)
+            loop_line_list = fix_loop_list(loop_line_list)
+            pre_line = None
+            sorted_loop = sort_loop(loop_line_list)
+            for line in sorted_loop:
+                big_line += line.point_list
+            loop_poly = Polygon(big_line)
+        add_to_poly_list(loop_poly)
+    found_loop = False
+    cur_display_dot = None
+    dot_mode = False
+    update_dot_boundings()
+    available_bool = available_moves()
+    p1_turn = not p1_turn
+    update_misc(available_bool) 
 
 while True:
     screen.fill((230, 230, 230))
@@ -321,7 +397,7 @@ while True:
     pygame.display.flip()
     if not n.id == p1_turn:
         cur_line = remove_consecutive_dups(cur_line)
-        to_send_list = [p1_turn, dot_list[-1].point, cur_display_dot, cur_line]
+        to_send_list = [dot_list[-1].point, cur_display_dot, cur_line]
         n.send(to_send_list)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -344,38 +420,7 @@ while True:
                     line_list[-1].marked = True
                     line_list.append(line2)
                     line_list[-1].find_adj()
-                    if len(line_list[-1].adj_lines) > 1:
-                        check_loop(line_list[-1], start_dot)
-                    for line in line_list:
-                        line.marked = False
-                    if found_loop:
-                        loop_line_list.clear()
-                        if start_dot == end_dot:
-                            loop_line_list.append(line1)
-                            loop_line_list.append(line2)
-                            loop_poly = Polygon(line1.point_list + line2.point_list) 
-                        else:
-                            temp_line = last_line_in_loop
-                            big_line = []
-                            while temp_line.prev_line != None:
-                                loop_line_list.append(temp_line)
-                                temp_line = temp_line.prev_line
-                            loop_line_list.append(line1)
-                            loop_line_list.append(line2)
-                            loop_line_list = fix_loop_list(loop_line_list)
-                            pre_line = None
-                            sorted_loop = sort_loop(loop_line_list)
-                            for line in sorted_loop:
-                                big_line += line.point_list
-                            loop_poly = Polygon(big_line)
-                        add_to_poly_list(loop_poly)
-                    found_loop = False
-                    cur_display_dot = None
-                    dot_mode = False
-                    update_dot_boundings()
-                    available_bool = available_moves()
-                    p1_turn = not p1_turn
-                    update_misc(available_bool)
+                    update_backend()
             elif event.type == pygame.MOUSEBUTTONUP:
                 overlap = False
                 if event.button == 1 and dragging:
@@ -428,4 +473,8 @@ while True:
             else:
                 cur_display_dot = None
     else:
-        pass
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                raise SystemExit
+        received_list = n.send([True, 4])
+        main_server_sync(received_list)

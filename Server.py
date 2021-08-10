@@ -21,8 +21,10 @@ print("Server started, waiting for connection")
 
 player_info = [True, True]
 p1_turn = True
+setup_end = False
 #receive  data from one client and send it to only the other
 def threaded_client(conn, client_num):
+    global setup_end
     print("this is where the stuff is")
     conn.send(pickle.dumps(client_num))
     reply = ""
@@ -30,7 +32,10 @@ def threaded_client(conn, client_num):
         try:
             data = pickle.loads(conn.recv(2048))
             print(data)
-            player_info[client_num] = data
+            if data == 24:
+                setup_end = True
+            else:
+                player_info[client_num] = data
             if not data:
                 print("Disconnected")
                 break
@@ -38,7 +43,11 @@ def threaded_client(conn, client_num):
                 if client_num == 0:
                     reply = player_info[1]
                 else:
-                    reply = player_info[0]
+                    if setup_end:
+                        reply = 48
+                        setup_end = False
+                    else:
+                        reply = player_info[0]
                 print("Received: ", data)
                 print("Sending to client: ", reply)
             conn.sendall(pickle.dumps(reply))
