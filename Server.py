@@ -19,21 +19,29 @@ except socket.error as e:
 s.listen(2)
 print("Server started, waiting for connection")
 
-player_info = [True, True]
+player_info = [99, 99]
 p1_turn = True
 setup_end = False
+
 #receive  data from one client and send it to only the other
 def threaded_client(conn, client_num):
     global setup_end
+    global switch_turn
     print("this is where the stuff is")
     conn.send(pickle.dumps(client_num))
     reply = ""
     while True:
         try:
             data = pickle.loads(conn.recv(2048))
-            print(data)
+            #print(data)
             if data == 24:
                 setup_end = True
+            elif data == [True, 4]:
+                player_info[client_num] == 99
+                pass
+            elif data == 12:
+                player_info[0] = player_info[client_num]
+                player_info[1] = player_info[client_num]
             else:
                 player_info[client_num] = data
             if not data:
@@ -41,15 +49,15 @@ def threaded_client(conn, client_num):
                 break
             else:
                 if client_num == 0:
-                    reply = player_info[1]
+                        reply = player_info[1]
                 else:
                     if setup_end:
                         reply = 48
                         setup_end = False
                     else:
                         reply = player_info[0]
-                print("Received: ", data)
-                print("Sending to client: ", reply)
+               # print("Received: ", data)
+               # print("Sending to client: ", reply)
             conn.sendall(pickle.dumps(reply))
         except:
             break

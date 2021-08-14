@@ -1,5 +1,6 @@
 import socket
 import pickle
+import sys
 
 class Network:
     def __init__(self):
@@ -19,6 +20,7 @@ class Network:
 
     def send(self, data):
         try:
+            to_send = pickle.dumps(data)
             self.client.send(pickle.dumps(data))
             return pickle.loads(self.client.recv(2048))
         except socket.error as e:

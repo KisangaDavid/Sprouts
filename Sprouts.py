@@ -3,7 +3,6 @@ import pygame.font
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import nearest_points
 from Network import Network
-import pickle
 import itertools
 
 DOT_RADIUS = 8
@@ -15,6 +14,7 @@ pygame.font.init()
 clock = pygame.time.Clock()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
+# Ugly global variables, will clean up later 
 dragging = False
 p1_turn = True
 turn_font = pygame.font.SysFont("arial", 30)
@@ -31,6 +31,7 @@ last_line_in_loop = None
 poly_list = []
 n = None
 
+
 class Dot():
     def __init__(self, da_point, num_con):
         self.xval = da_point.x
@@ -43,6 +44,7 @@ class Dot():
 
     def draw_self(self):
         pygame.draw.circle(screen, "black", (self.xval, self.yval), DOT_RADIUS)
+
 
 class Line():
     def __init__(self, point_list, start, end):
@@ -62,13 +64,10 @@ class Line():
 
     def find_start_end(self):
         for dot in dot_list:
-            if dot.point == self.point_list[0]:
-                print("FOUND START")
+            if dot.point == Point(self.point_list[0]):
                 self.start = dot
-            if dot.point == self.point_list[-1]:
-                print("FOUND END")
+            if dot.point == Point(self.point_list[-1]):
                 self.end = dot
-
 
     def reverse(self):
         temp = self.start
@@ -76,6 +75,7 @@ class Line():
         self.end = temp
         self.point_list.reverse()
         self.line_string = LineString(self.point_list)
+
 
 def remove_consecutive_dups(list):
     return [i[0] for i in itertools.groupby(list)]
@@ -93,6 +93,27 @@ def remove_start_and_end_overlap(line, start_dot, end_dot):
         else:
             break
     return finished_line
+
+def remove_dot_dups():
+    global dot_list
+    new_dot_list = []
+    for dot in dot_list:
+        if dot not in new_dot_list:
+            new_dot_list.append(dot)
+    dot_list = new_dot_list
+
+def remove_line_dups():
+    global line_list
+    new_line_list = []
+    is_dup = False
+    for line in line_list:
+        for new_line in new_line_list:
+            if line.point_list == new_line.point_list:
+                is_dup = True
+        if not is_dup:
+            new_line_list.append(line)
+        is_dup = False
+    line_list = new_line_list           
 
 def update_dot_boundings():
     for dot in dot_list:
@@ -261,7 +282,7 @@ def draw_misc():
     else:
         screen.blit(turn_text,((SCREEN_WIDTH / 2) - (turn_text.get_rect().width / 2), 20))
 
-# initialize dot_list with none so checking last element is always valid
+# Should initialize dot_list with none so checking last element is always valid
 def setup_server_sync(received_data):
     global cur_display_dot
     if len(dot_list) == 0:
@@ -278,25 +299,39 @@ def main_server_sync(received_data):
     global cur_display_dot
     global cur_line
     global line_list
+    global found_loop
+    if received_data == 99:
+        return
     if received_data[1] != cur_display_dot:
         cur_display_dot = received_data[1]
     if received_data[2] != cur_line:
         cur_line = received_data[2]
+    if len(line_list) == 0:
+        if received_data[3] != None and len(received_data[3]) > 1:
+            new_line = Line(received_data[3], None, None)
+            new_line.find_start_end()
+            new_line.start.num_con += 1
+            new_line.end.num_con += 1
+            line_list.append(new_line)
+    elif line_list[-1].point_list != received_data[3] and received_data[0] == dot_list[-1].point:
+            new_line = Line(received_data[3], None, None)
+            new_line.find_start_end()
+            new_line.start.num_con += 1
+            new_line.end.num_con += 1
+            line_list.append(new_line)
     if received_data[0] != dot_list[-1].point:
-        new_dot = Dot(received_data[0], 0)
+        new_dot = Dot(received_data[0], 2)
         dot_list.append(new_dot)
-        two_lines = split_line_at_dot(line_list[-1].point_list, new_dot)
-        line1 = Line(two_lines[0], None, None)
+        line1 = Line(received_data[3], None, None)
         line1.find_start_end()
-        line2 = Line(two_lines[1], None, None)
+        line2 = Line(received_data[4], None, None)
         line2.find_start_end()
-        line_list[-1] = line1
-        line_list[-1].marked = True
-        line_list.append(line2)
+        line_list[-1] = line2
+        line_list.append(line1)
         line_list[-1].find_adj()
-        update_backend()
-
-# to_send_list = [dot_list[-1].point, cur_display_dot, cur_line]
+        if line2.start == line1.end:
+            found_loop = True
+        update_backend(line2, line1)
 
 def set_up_board():
     global n
@@ -346,13 +381,18 @@ n = Network()
 print(n.id)
 set_up_board()
 
-def update_backend():
+def update_backend(line1, line2):
     global found_loop
     global loop_line_list
     global p1_turn
     global cur_display_dot
     global dot_mode
     global pre_line
+    start_dot = line1.start
+    end_dot = line2.end
+    remove_line_dups()
+    remove_dot_dups()
+    line_list[-2].marked = True
     if len(line_list[-1].adj_lines) > 1:
         check_loop(line_list[-1], start_dot)
     for line in line_list:
@@ -383,9 +423,12 @@ def update_backend():
     dot_mode = False
     update_dot_boundings()
     available_bool = available_moves()
+    n.send([dot_list[-1].point, cur_display_dot, cur_line, line_list[-1].point_list, line_list[-2].point_list])
+    n.send(12)
     p1_turn = not p1_turn
     update_misc(available_bool) 
 
+# TODO: break main loop into more readable functions
 while True:
     screen.fill((230, 230, 230))
     draw_dots()
@@ -397,7 +440,10 @@ while True:
     pygame.display.flip()
     if not n.id == p1_turn:
         cur_line = remove_consecutive_dups(cur_line)
-        to_send_list = [dot_list[-1].point, cur_display_dot, cur_line]
+        if len(line_list) < 1:
+            to_send_list = [dot_list[-1].point, cur_display_dot, cur_line, None, None]
+        else:
+            to_send_list = [dot_list[-1].point, cur_display_dot, cur_line, line_list[-1].point_list, None]
         n.send(to_send_list)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -417,10 +463,9 @@ while True:
                     line1 = Line(two_lines[0], start_dot, new_dot)
                     line2 = Line(two_lines[1], new_dot, end_dot)
                     line_list[-1] = line1
-                    line_list[-1].marked = True
                     line_list.append(line2)
                     line_list[-1].find_adj()
-                    update_backend()
+                    update_backend(line1, line2)
             elif event.type == pygame.MOUSEBUTTONUP:
                 overlap = False
                 if event.button == 1 and dragging:
