@@ -3,7 +3,11 @@ import pygame.font
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import nearest_points
 from Network import Network
+import threading
+import Server
 import itertools
+import urllib.request
+
 
 DOT_RADIUS = 8
 SCREEN_WIDTH = 1200
@@ -13,11 +17,13 @@ pygame.init()
 pygame.font.init()
 clock = pygame.time.Clock()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.scrap.init()
 
 # Ugly global variables, will clean up later 
 dragging = False
 p1_turn = True
 turn_font = pygame.font.SysFont("arial", 30)
+smaller_font = pygame.font.SysFont("arial", 28)
 turn_text = None
 dot_list = []
 line_list = []
@@ -87,6 +93,8 @@ def remove_start_and_end_overlap(line, start_dot, end_dot):
             finished_line.remove(point)
         else:
             break
+    if len(finished_line) < 1:
+        return []
     for point2 in reversed(line):
         if (abs(point2[0] - end_dot.xval) <= DOT_RADIUS - 2) and ((abs(point2[1] - end_dot.yval) <= DOT_RADIUS - 2)):
             finished_line.remove(point2)
@@ -251,6 +259,22 @@ def sort_loop(loop):
                 break
     return to_return
 
+def draw_game_setup(phase_tracker):
+    waiting_text = None
+    if phase_tracker == 0:
+        setup_text = turn_font.render("Press Enter to start hosting a game, or press Space to connect to a host.", True, (0,0,0))
+    elif phase_tracker == 1:
+        setup_text = smaller_font.render("Connection code has been copied to clipboard. Send this code to your friend to start playing!", True, (0,0,0))
+        waiting_text = turn_font.render("Waiting for Player 2 to connect...", True, (0,0,0))
+    elif phase_tracker == 2:
+        setup_text = turn_font.render("Copy the host's connection code to your clipboard, then press Enter to play!", True, (0,0,0))
+    elif phase_tracker == 3:
+        setup_text = smaller_font.render("Invalid connection code. Please copy the host's connection code and try again!", True, (0,0,0))
+    screen.blit(setup_text, ((SCREEN_WIDTH / 2) - (setup_text.get_rect().width / 2), 20))
+    
+    if waiting_text:
+        screen.blit(waiting_text, ((SCREEN_WIDTH / 2) - (waiting_text.get_rect().width / 2), (SCREEN_HEIGHT / 2) - (waiting_text.get_rect().height / 2)))
+
 def draw_lines():
     for line in line_list:
         pygame.draw.lines(screen, "black", False, line.point_list, width = 4)
@@ -282,9 +306,14 @@ def draw_misc():
     else:
         screen.blit(turn_text,((SCREEN_WIDTH / 2) - (turn_text.get_rect().width / 2), 20))
 
-# Should initialize dot_list with none so checking last element is always valid
+
 def setup_server_sync(received_data):
     global cur_display_dot
+    if received_data == None:
+        pygame.quit()
+        raise SystemExit
+    if received_data == 99:
+        return
     if len(dot_list) == 0:
         if received_data[0] != None:
             new_dot = Dot(received_data[0], 0)
@@ -300,6 +329,9 @@ def main_server_sync(received_data):
     global cur_line
     global line_list
     global found_loop
+    if received_data == None:
+        pygame.quit()
+        raise SystemExit
     if received_data == 99:
         return
     if received_data[1] != cur_display_dot:
@@ -333,6 +365,42 @@ def main_server_sync(received_data):
             found_loop = True
         update_backend(line2, line1)
 
+def set_up_game():
+    global n
+    phase_tracker = 0
+    while True:
+        screen.fill((230, 230, 230))
+        draw_game_setup(phase_tracker)
+        clock.tick(60)
+        pygame.display.flip()
+        if phase_tracker == 1:
+            p2_connected = n.send(4)
+            if p2_connected:
+                return
+        if phase_tracker >= 2:
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                    external_ip = pygame.scrap.get("text/plain;charset=utf-8").decode()
+                    print(external_ip)
+                    n = Network(external_ip)
+                    if n.id == -1:
+                        phase_tracker = 3
+                    else:
+                        return
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                raise SystemExit
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and phase_tracker == 0:
+                external_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
+                pygame.scrap.put("text/plain;charset=utf-8", external_ip.encode("utf-8"))
+                thread = threading.Thread(target=Server.start_server, args = (external_ip, ))
+                thread.daemon = True
+                thread.start()
+                phase_tracker = 1
+                n = Network(external_ip)   
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE and phase_tracker == 0:
+                phase_tracker = 2
+            
 def set_up_board():
     global n
     global cur_display_dot
@@ -377,10 +445,8 @@ def set_up_board():
             setup_server_sync(received_list)
 
 pygame.display.set_caption("Sprouts")
-n = Network()
-print(n.id)
+set_up_game()
 set_up_board()
-
 def update_backend(line1, line2):
     global found_loop
     global loop_line_list
@@ -447,6 +513,7 @@ while True:
         n.send(to_send_list)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                n.send(22)
                 raise SystemExit
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mpos = pygame.mouse.get_pos()
@@ -473,6 +540,8 @@ while True:
                     for dot in dot_list:
                         if (abs(mpos[0] - dot.xval) <= DOT_RADIUS - 2) and (abs(mpos[1] - dot.yval) <= DOT_RADIUS - 2):
                             no_dups = remove_start_and_end_overlap(remove_consecutive_dups(cur_line), start_dot, dot)
+                            if len(no_dups) < 1:
+                                break
                             temp_line_string = LineString(no_dups)
                             no_dups.append((dot.xval, dot.yval))
                             no_dups.insert(0,(start_dot.xval, start_dot.yval))
