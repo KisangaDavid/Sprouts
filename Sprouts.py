@@ -3,6 +3,7 @@ import pygame.font
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import nearest_points
 from Network import Network
+from base64 import b64encode, b64decode
 import threading
 import Server
 import itertools
@@ -10,8 +11,8 @@ import urllib.request
 
 
 DOT_RADIUS = 8
-SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 900
+SCREEN_WIDTH = 1300
+SCREEN_HEIGHT = 975
 
 pygame.init()
 pygame.font.init()
@@ -22,8 +23,11 @@ pygame.scrap.init()
 # Ugly global variables, will clean up later 
 dragging = False
 p1_turn = True
+available_bool = True
+wins = [0,0]
 turn_font = pygame.font.SysFont("arial", 30)
 smaller_font = pygame.font.SysFont("arial", 28)
+win_font = pygame.font.SysFont("arial", 20)
 turn_text = None
 dot_list = []
 line_list = []
@@ -50,7 +54,6 @@ class Dot():
 
     def draw_self(self):
         pygame.draw.circle(screen, "black", (self.xval, self.yval), DOT_RADIUS)
-
 
 class Line():
     def __init__(self, point_list, start, end):
@@ -133,7 +136,30 @@ def update_dot_boundings():
             if poly.touches(dot.point):
                 dot.on_poly.append(poly)
 
+def update_misc():
+    global available_bool
+    global turn_text
+    global wins
+    global p1_turn
+    winner = 0
+    if available_bool:
+        if p1_turn:
+            turn_text = turn_font.render("Player 1's Turn", True, (0,0,0))
+        else:
+            turn_text = turn_font.render("Player 2's Turn", True, (0,0,0))
+    else:
+        if p1_turn:
+            winner = 1
+            wins[1] += 1
+        else:
+            wins[0] += 1
+        if winner == n.id:
+            turn_text = turn_font.render("You Win!", True, (0,0,0))
+        else:
+            turn_text = turn_font.render("You Lose!", True, (0,0,0))
+
 def available_moves():
+    global available_bool
     for dot in dot_list:
         if dot.num_con < 2:
             return True
@@ -148,21 +174,13 @@ def available_moves():
                 if poly in con_dot.in_or_on_poly:
                     return True
             if len(dot.in_or_on_poly) == 0 and len(con_dot.in_or_on_poly) == 0:
-                return True
+                available_bool = True
+                return
             if (len(dot.on_poly) < 2 and (dot.in_or_on_poly == dot.on_poly)) and (len(con_dot.on_poly) < 2 and (con_dot.in_or_on_poly == con_dot.on_poly)):
-                return True
-    return False
-
-def update_misc(available_bool):
-    global turn_text
-    if p1_turn and not available_bool:
-        turn_text = turn_font.render("Player 2 Wins!", True, (0,0,0))
-    elif not p1_turn and not available_bool:
-        turn_text = turn_font.render("Player 1 Wins!", True, (0,0,0))
-    elif p1_turn:
-        turn_text = turn_font.render("Player 1's Turn", True, (0,0,0))
-    else:
-        turn_text = turn_font.render("Player 2's Turn", True, (0,0,0))
+                available_bool = True
+                return
+    available_bool = False
+    return
 
 def fix_loop_list(loop_line_list):
     to_return = []
@@ -271,7 +289,6 @@ def draw_game_setup(phase_tracker):
     elif phase_tracker == 3:
         setup_text = smaller_font.render("Invalid connection code. Please copy the host's connection code and try again!", True, (0,0,0))
     screen.blit(setup_text, ((SCREEN_WIDTH / 2) - (setup_text.get_rect().width / 2), 20))
-    
     if waiting_text:
         screen.blit(waiting_text, ((SCREEN_WIDTH / 2) - (waiting_text.get_rect().width / 2), (SCREEN_HEIGHT / 2) - (waiting_text.get_rect().height / 2)))
 
@@ -283,13 +300,6 @@ def draw_cur_line():
     if(len(cur_line) > 1 ):
        pygame.draw.lines(screen, "black", False, cur_line, width = 4)
 
-def draw_intro():
-    if n.id == 0:
-        intro_text = turn_font.render("Click to place starting dots. Press enter to start!", True, (0,0,0))
-    else:
-        intro_text = turn_font.render("Waiting for player 1 to place starting dots...", True, (0,0,0))
-    screen.blit(intro_text, ((SCREEN_WIDTH / 2) - (intro_text.get_rect().width / 2), 20))
-
 def draw_dots():
     for dot in dot_list:
         dot.draw_self()
@@ -298,14 +308,37 @@ def draw_cur_dot():
     if cur_display_dot:
         pygame.draw.circle(screen, "red", (cur_display_dot.x, cur_display_dot.y), DOT_RADIUS)
 
+def draw_intro():
+    if n.id == 0:
+        intro_text = turn_font.render("Click to place starting dots. Press enter to start!", True, (0,0,0))
+    else:
+        intro_text = turn_font.render("Waiting for player 1 to place starting dots...", True, (0,0,0))
+    screen.blit(intro_text, ((SCREEN_WIDTH / 2) - (intro_text.get_rect().width / 2), 20))
+
+def draw_wins():
+    global wins
+    global win_font
+    p1_wins = win_font.render("Player 1 Wins: " + str(wins[0]), True, (40,40,220))
+    p2_wins = win_font.render("Player 2 Wins: " + str(wins[1]), True, (220,40,40))
+    screen.blit(p1_wins, (20, 30))
+    screen.blit(p2_wins, (SCREEN_WIDTH - 20 - p2_wins.get_rect().width, 30))
+
 def draw_misc():
+    global turn_font
     global turn_text
+    global n 
+    global available_bool
     if turn_text == None:
         default_text = turn_font.render("Player 1's Turn", True, (0,0,0))
         screen.blit(default_text,((SCREEN_WIDTH / 2) - (default_text.get_rect().width / 2), 20))
     else:
         screen.blit(turn_text,((SCREEN_WIDTH / 2) - (turn_text.get_rect().width / 2), 20))
-
+    if not available_bool:
+        if n.id == 0:
+            replay_text = turn_font.render("Press Enter to play again!", True, (0,0,0))
+        else:
+            replay_text = turn_font.render("Waiting for Player 1 to restart game...", True, (0,0,0))
+        screen.blit(replay_text, ((SCREEN_WIDTH / 2) - (replay_text.get_rect().width / 2), 80))
 
 def setup_server_sync(received_data):
     global cur_display_dot
@@ -329,10 +362,10 @@ def main_server_sync(received_data):
     global cur_line
     global line_list
     global found_loop
-    if received_data == None:
+    if received_data == None or received_data == 0:
         pygame.quit()
         raise SystemExit
-    if received_data == 99:
+    if received_data == 99 or (type(received_data) is list and len(received_data) < 3):
         return
     if received_data[1] != cur_display_dot:
         cur_display_dot = received_data[1]
@@ -379,9 +412,14 @@ def set_up_game():
                 return
         if phase_tracker >= 2:
             for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    raise SystemExit
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-                    external_ip = pygame.scrap.get("text/plain;charset=utf-8").decode()
-                    print(external_ip)
+                    reversed = pygame.scrap.get("text/plain;charset=utf-8").decode()
+                    b64_ip = reversed[::-1]
+                    b_b64_ip = b64_ip.encode("ascii")
+                    b_external_ip = b64decode(b_b64_ip)
+                    external_ip = b_external_ip.decode("ascii")
                     n = Network(external_ip)
                     if n.id == -1:
                         phase_tracker = 3
@@ -389,10 +427,15 @@ def set_up_game():
                         return
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                n.send(22)
                 raise SystemExit
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and phase_tracker == 0:
                 external_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
-                pygame.scrap.put("text/plain;charset=utf-8", external_ip.encode("utf-8"))
+                b_external_ip = external_ip.encode("ascii")
+                b_b64_ip = b64encode(b_external_ip)
+                b64_ip = b_b64_ip.decode("ascii")
+                to_send = b64_ip[::-1]
+                pygame.scrap.put("text/plain;charset=utf-8", to_send.encode("utf-8"))
                 thread = threading.Thread(target=Server.start_server, args = (external_ip, ))
                 thread.daemon = True
                 thread.start()
@@ -409,6 +452,7 @@ def set_up_board():
         draw_cur_dot()
         draw_dots()
         draw_intro()
+        draw_wins()
         clock.tick(60)
         pygame.display.flip()
         if n.id == 0:
@@ -419,6 +463,7 @@ def set_up_board():
             n.send(to_send_list)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    n.send(22)
                     raise SystemExit
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and cur_display_dot:
                     new_dot = Dot(cur_display_dot, 0)
@@ -444,16 +489,14 @@ def set_up_board():
                 break
             setup_server_sync(received_list)
 
-pygame.display.set_caption("Sprouts")
-set_up_game()
-set_up_board()
+
 def update_backend(line1, line2):
     global found_loop
     global loop_line_list
     global p1_turn
     global cur_display_dot
     global dot_mode
-    global pre_line
+
     start_dot = line1.start
     end_dot = line2.end
     remove_line_dups()
@@ -478,7 +521,6 @@ def update_backend(line1, line2):
             loop_line_list.append(line1)
             loop_line_list.append(line2)
             loop_line_list = fix_loop_list(loop_line_list)
-            pre_line = None
             sorted_loop = sort_loop(loop_line_list)
             for line in sorted_loop:
                 big_line += line.point_list
@@ -488,13 +530,17 @@ def update_backend(line1, line2):
     cur_display_dot = None
     dot_mode = False
     update_dot_boundings()
-    available_bool = available_moves()
+    available_moves()
     n.send([dot_list[-1].point, cur_display_dot, cur_line, line_list[-1].point_list, line_list[-2].point_list])
     n.send(12)
     p1_turn = not p1_turn
-    update_misc(available_bool) 
+    update_misc() 
 
-# TODO: break main loop into more readable functions
+pygame.display.set_caption("Sprouts")
+set_up_game()
+set_up_board()
+
+# TODO: break main loop into more readable functions, encrypt ip
 while True:
     screen.fill((230, 230, 230))
     draw_dots()
@@ -502,9 +548,25 @@ while True:
     draw_lines()
     draw_cur_dot()
     draw_misc()
+    draw_wins()
     clock.tick(60)
     pygame.display.flip()
-    if not n.id == p1_turn:
+    if n.id == 0 and not available_bool:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                n.send(22)
+                raise SystemExit
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                n.send(33)
+                dot_list.clear()
+                line_list.clear()
+                poly_list.clear()
+                loop_line_list.clear()
+                available_bool = True
+                set_up_board()
+                p1_turn = True
+                update_misc()
+    if not n.id == p1_turn and available_bool:
         cur_line = remove_consecutive_dups(cur_line)
         if len(line_list) < 1:
             to_send_list = [dot_list[-1].point, cur_display_dot, cur_line, None, None]
@@ -533,7 +595,7 @@ while True:
                     line_list.append(line2)
                     line_list[-1].find_adj()
                     update_backend(line1, line2)
-            elif event.type == pygame.MOUSEBUTTONUP:
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 overlap = False
                 if event.button == 1 and dragging:
                     dragging = False
@@ -590,5 +652,18 @@ while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 raise SystemExit
+        if n.id == 0 and not available_bool:
+            continue
         received_list = n.send([True, 4])
-        main_server_sync(received_list)
+        if received_list == 33 and n.id == 1:
+            dot_list.clear()
+            line_list.clear()
+            poly_list.clear()
+            loop_line_list.clear()
+            available_bool = True
+            set_up_board()
+            p1_turn = True
+            update_misc()
+        else:
+            main_server_sync(received_list)
+            

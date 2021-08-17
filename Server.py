@@ -1,22 +1,22 @@
 import socket
 import threading
 import pickle
-import urllib.request
 
 player_info = [99, 99]
 setup_end = False
+new_game = False
 clients_connected = [False, False]
 
-#receive  data from one client and send it to only the other
 def threaded_client(conn, client_num):
+    global clients_connected
     global setup_end
-    global switch_turn
+    global new_game 
     clients_connected[client_num] = True
     conn.send(pickle.dumps(client_num))
     reply = ""
     while True:
         try:
-            data = pickle.loads(conn.recv(2048))
+            data = pickle.loads(conn.recv(4096))
             if data == 24:
                 setup_end = True
             elif data == [True, 4]:
@@ -30,6 +30,10 @@ def threaded_client(conn, client_num):
                 player_info[0] = 0
                 player_info[1] = 0
                # break
+            elif data == 33:
+                new_game = True
+                player_info[0] == 99
+                player_info[1] == 99
             else:
                 player_info[client_num] = data
             if not data:
@@ -45,6 +49,9 @@ def threaded_client(conn, client_num):
                     if setup_end:
                         reply = 48
                         setup_end = False
+                    elif new_game:
+                        reply = 33
+                        new_game = False
                     else:
                         reply = player_info[0]
             conn.sendall(pickle.dumps(reply))
@@ -63,14 +70,9 @@ def start_server(external_ip):
     except socket.error as e:
         str(e)
     s.listen(2)
-    print("Server started, waiting for connection")
     client_num = 0
     while True:
         conn, addr = s.accept()
-        print("Connected to:", addr)
         thread = threading.Thread(target=threaded_client, args = (conn, client_num))
         thread.start()
         client_num += 1
-
-if __name__ == '__main__':
-    start_server(urllib.request.urlopen('https://ident.me').read().decode('utf8'))
