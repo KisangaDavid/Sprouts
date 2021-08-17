@@ -29,7 +29,6 @@ def threaded_client(conn, client_num):
             elif data == 22:
                 player_info[0] = 0
                 player_info[1] = 0
-               # break
             elif data == 33:
                 new_game = True
                 player_info[0] == 99

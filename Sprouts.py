@@ -342,7 +342,7 @@ def draw_misc():
 
 def setup_server_sync(received_data):
     global cur_display_dot
-    if received_data == None:
+    if received_data == None or received_data == 0:
         pygame.quit()
         raise SystemExit
     if received_data == 99:
@@ -413,13 +413,17 @@ def set_up_game():
         if phase_tracker >= 2:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    pygame.quit()
                     raise SystemExit
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
                     reversed = pygame.scrap.get("text/plain;charset=utf-8").decode()
                     b64_ip = reversed[::-1]
                     b_b64_ip = b64_ip.encode("ascii")
-                    b_external_ip = b64decode(b_b64_ip)
-                    external_ip = b_external_ip.decode("ascii")
+                    try:
+                        b_external_ip = b64decode(b_b64_ip)
+                        external_ip = b_external_ip.decode("ascii")
+                    except:
+                        external_ip = "BAD CODE"
                     n = Network(external_ip)
                     if n.id == -1:
                         phase_tracker = 3
@@ -427,7 +431,7 @@ def set_up_game():
                         return
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                n.send(22)
+                pygame.quit()
                 raise SystemExit
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and phase_tracker == 0:
                 external_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
@@ -464,6 +468,7 @@ def set_up_board():
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     n.send(22)
+                    pygame.quit()
                     raise SystemExit
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and cur_display_dot:
                     new_dot = Dot(cur_display_dot, 0)
@@ -483,6 +488,7 @@ def set_up_board():
         else:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    pygame.quit()
                     raise SystemExit
             received_list = n.send([True, 4])
             if (received_list == 48):
@@ -555,6 +561,7 @@ while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 n.send(22)
+                pygame.quit()
                 raise SystemExit
             if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
                 n.send(33)
@@ -576,6 +583,7 @@ while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 n.send(22)
+                pygame.quit()
                 raise SystemExit
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mpos = pygame.mouse.get_pos()
@@ -651,6 +659,7 @@ while True:
     else:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                pygame.quit()
                 raise SystemExit
         if n.id == 0 and not available_bool:
             continue
