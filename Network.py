@@ -2,10 +2,10 @@ import socket
 import pickle
 
 class Network:
-    def __init__(self, ipv6):
-        self.client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        self.server = ipv6
-        self.port = 5050
+    def __init__(self, ipv4):
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server = ipv4
+        self.port = 14400
         self.addr = (self.server, self.port)
         self.id = self.connect()
 
@@ -13,7 +13,8 @@ class Network:
         try:
             self.client.connect(self.addr)
             return pickle.loads(self.client.recv(4096))
-        except:
+        except Exception as e:
+            print(e)
             return -1
 
     def send(self, data):

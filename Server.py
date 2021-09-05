@@ -60,15 +60,14 @@ def threaded_client(conn, client_num):
     client_num -= 1
     conn.close()
 
-def start_server(external_ip):
-    SERVER = external_ip
-    PORT = 5050
-    s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+def start_server():
+    PORT = 14400
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        s.bind((SERVER, PORT))
+        s.bind(('', PORT))
     except socket.error as e:
-        str(e)
-    s.listen(2)
+        print(e)
+    s.listen()
     client_num = 0
     while True:
         conn, addr = s.accept()

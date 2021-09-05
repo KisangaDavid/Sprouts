@@ -6,6 +6,7 @@ from Network import Network
 from base64 import b64encode, b64decode
 import threading
 import Server
+import socket
 import itertools
 import urllib.request
 
@@ -434,17 +435,18 @@ def set_up_game():
                 pygame.quit()
                 raise SystemExit
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and phase_tracker == 0:
-                external_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
+                external_ip = urllib.request.urlopen('https://v4.ident.me/').read().decode('utf8')
                 b_external_ip = external_ip.encode("ascii")
                 b_b64_ip = b64encode(b_external_ip)
                 b64_ip = b_b64_ip.decode("ascii")
                 to_send = b64_ip[::-1]
                 pygame.scrap.put("text/plain;charset=utf-8", to_send.encode("utf-8"))
-                thread = threading.Thread(target=Server.start_server, args = (external_ip, ))
+                thread = threading.Thread(target=Server.start_server, args = ())
                 thread.daemon = True
                 thread.start()
                 phase_tracker = 1
-                n = Network(external_ip)   
+                local_ip = socket.gethostbyname(socket.gethostname())
+                n = Network(local_ip)   
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE and phase_tracker == 0:
                 phase_tracker = 2
             
