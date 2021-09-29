@@ -9,6 +9,8 @@ import Server
 import socket
 import itertools
 import urllib.request
+import os
+import sys
 
 
 DOT_RADIUS = 8
@@ -21,7 +23,8 @@ clock = pygame.time.Clock()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.scrap.init()
 
-# Ugly global variables, will clean up later 
+# Ugly global variables, will clean up later
+local = True 
 dragging = False
 p1_turn = True
 available_bool = True
@@ -40,7 +43,19 @@ found_loop = False
 loop_line_list = []
 last_line_in_loop = None
 poly_list = []
+
 n = None
+
+# For making an .exe
+# def resource_path(relative_path):
+#     """ Get absolute path to resource, works for dev and for PyInstaller """
+#     try:
+#         # PyInstaller creates a temp folder and stores path in _MEIPASS
+#         base_path = sys._MEIPASS
+#     except Exception:
+#         base_path = os.path.abspath(".")
+
+#     return os.path.join(base_path, relative_path)
 
 
 class Dot():
@@ -399,6 +414,30 @@ def main_server_sync(received_data):
             found_loop = True
         update_backend(line2, line1)
 
+def local_or_online():
+    global local
+    while True:
+        screen.fill((230, 230, 230))
+        text = turn_font.render("Press Space for local play (same network or computer), or Enter for online play.", True, (0,0,0))
+        screen.blit(text, ((SCREEN_WIDTH / 2) - (text.get_rect().width / 2), 20))
+        pygame.display.flip()
+        clock.tick(60)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                raise SystemExit
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                local = False
+                return
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                return
+
+def draw_intro():
+    if n.id == 0:
+        intro_text = turn_font.render("Click to place starting dots. Press enter to start!", True, (0,0,0))
+    else:
+        intro_text = turn_font.render("Waiting for player 1 to place starting dots...", True, (0,0,0))
+    screen.blit(intro_text, ((SCREEN_WIDTH / 2) - (intro_text.get_rect().width / 2), 20))
 def set_up_game():
     global n
     phase_tracker = 0
@@ -435,7 +474,10 @@ def set_up_game():
                 pygame.quit()
                 raise SystemExit
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and phase_tracker == 0:
-                external_ip = urllib.request.urlopen('https://v4.ident.me/').read().decode('utf8')
+                if local == False:
+                    external_ip = urllib.request.urlopen('https://v4.ident.me/').read().decode('utf8')
+                else:
+                    external_ip = socket.gethostbyname(socket.gethostname())
                 b_external_ip = external_ip.encode("ascii")
                 b_b64_ip = b64encode(b_external_ip)
                 b64_ip = b_b64_ip.decode("ascii")
@@ -545,10 +587,12 @@ def update_backend(line1, line2):
     update_misc() 
 
 pygame.display.set_caption("Sprouts")
+
+local_or_online()
 set_up_game()
 set_up_board()
 
-# TODO: break main loop into more readable functions, encrypt ip
+# TODO: break main loop into more readable functions
 while True:
     screen.fill((230, 230, 230))
     draw_dots()
