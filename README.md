@@ -1,2 +1,2 @@
 # Sprouts
-An online version of the two-player pencil and paper game "Sprouts". Online play is enabled through one player hosting a server on their machine.Implemented using socket api. Standalone .exe included.
+An online version of the two-player pencil and paper game "Sprouts". For local multiplayer (same computer or network) simply follow the given instructions. For online play (different networks), the host must first forward port 14400.
