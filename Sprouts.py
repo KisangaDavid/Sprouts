@@ -57,7 +57,6 @@ n = None
 #         base_path = os.path.abspath(".")
 #     return os.path.join(base_path, relative_path)
 
-
 class Dot():
     def __init__(self, da_point, num_con):
         self.xval = da_point.x
@@ -588,6 +587,8 @@ def update_backend(line1, line2):
     p1_turn = not p1_turn
     update_misc() 
 
+programIcon = pygame.image.load('miniIcon.png')
+pygame.display.set_icon(programIcon)
 pygame.display.set_caption("Sprouts")
 
 local_or_online()
